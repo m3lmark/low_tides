@@ -74,10 +74,5 @@ One of the lowest tides in California on 2024-01-07 in SUISUN SLOUGH ENTRANCE at
 
 ---
 
-## **Acknowledgments**
-- **NOAA Tides & Currents API**: [NOAA Tides API Documentation](https://api.tidesandcurrents.noaa.gov/)  
-- **Tidepooling Enthusiasts**: For inspiring the creation of this tool!
 
----
-
-Enjoy exploring tidepools and discovering fascinating marine life! 🐚
+Happy 'poolin :^)
