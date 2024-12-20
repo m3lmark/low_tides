@@ -1,10 +1,10 @@
+from app import app
 from flask import render_template, request, redirect, url_for
 import json
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import threading
 import folium
-from app import app
 
 
 def load_stations(filename):
@@ -13,106 +13,158 @@ def load_stations(filename):
         return json.load(f)
 
 
-def fetch_station_info(station_id):
-    """Fetches the station name and coordinates for a given station ID."""
-    url = f"https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations/{station_id}.json"
-    response = requests.get(url)
-    if response.ok:
-        data = response.json()
-        station_info = data["stations"][0]
-        station_name = station_info["name"].title()
-        coordinates = (station_info["lat"], station_info["lng"])
-        return station_name, coordinates
-    return "Unknown Station", (0, 0)
+@app.route("/")
+def index():
+    stations = load_stations("stations.json")
+    return render_template("index.html", regions=stations.keys())
 
 
-def fetch_tide_data(station, start_date, end_date):
-    """Fetches tide data for a specific station."""
-    url = (
-        f"https://api.tidesandcurrents.noaa.gov/api/prod/datagetter"
-        f"?begin_date={start_date}&end_date={end_date}&station={station}"
-        f"&product=predictions&datum=MLLW&time_zone=lst_ldt&interval=hilo"
-        f"&units=english&application=DataAPI_Sample&format=json"
+@app.route("/find_lowest_tides", methods=["POST"])
+def find_lowest_tides():
+    region = request.form["region"]
+    daterange = request.form["daterange"]
+    num_of_results = int(request.form["num_of_results"])
+
+    # Split the date range into start and end dates
+    start_date, end_date = daterange.split(" - ")
+
+    # Convert dates to the correct format (yyyyMMdd)
+    start_date = datetime.strptime(start_date, "%m/%d/%Y")
+    end_date = datetime.strptime(end_date, "%m/%d/%Y")
+
+    # Enforce the maximum date range of 31 days
+    if (end_date - start_date).days > 31:
+        return "Date range cannot exceed 31 days.", 400
+
+    start_date = start_date.strftime("%Y%m%d")
+    end_date = end_date.strftime("%Y%m%d")
+
+    # Enforce the minimum and maximum number of results
+    if num_of_results < 1 or num_of_results > 25:
+        return "Number of results must be between 1 and 25.", 400
+
+    stations = load_stations("stations.json")
+    if region not in stations:
+        return "Invalid region. Exiting.", 400
+
+    lowest_tides = get_lowest_tides(
+        stations, region, start_date, end_date, num_of_results
     )
-    response = requests.get(url)
-    if response.ok:
-        data = response.json()
-        if "error" not in data:
-            return data["predictions"]
-    return []
+
+    if not lowest_tides:
+        return "No tide data found for the selected region and date range.", 404
+
+    map_html = create_map(lowest_tides)
+    return render_template(
+        "results.html", lowest_tides=lowest_tides, region=region, map_html=map_html
+    )
 
 
 def get_lowest_tides(stations, region, start_date, end_date, num_of_results):
     """Fetches the lowest tides for all stations in the region."""
     station_lows = []
-    total_stations = len(stations[region])
-    progress_lock = threading.Lock()
 
-    def fetch_data_for_station(station, index):
+    def fetch_data_for_station(station_id):
+        print(f"Fetching data for station: {station_id}")
+        station = fetch_station_metadata(station_id)
+        if station["lat"] is None or station["lon"] is None:
+            print(f"Skipping station {station_id} due to missing metadata.")
+            return
         predictions = fetch_tide_data(station, start_date, end_date)
         if predictions:
             lowest_tide = min(predictions, key=lambda x: float(x["v"]))
-            station_name, coordinates = fetch_station_info(station)
+            station_name = station["name"]
             # Convert time to 12-hour format with AM/PM
-            time_24h = datetime.strptime(lowest_tide["t"], "%Y-%m-%d %H:%M")
-            time_12h = time_24h.strftime("%Y-%m-%d %I:%M %p")
+            lowest_tide["time"] = datetime.strptime(
+                lowest_tide["t"], "%Y-%m-%d %H:%M"
+            ).strftime("%Y-%m-%d %I:%M %p")
             station_lows.append(
                 {
                     "station_name": station_name,
-                    "time": time_12h,
-                    "value": float(lowest_tide["v"]),
-                    "coordinates": coordinates,
+                    "value": lowest_tide["v"],
+                    "time": lowest_tide["time"],
+                    "lat": station["lat"],
+                    "lon": station["lon"],
                 }
             )
 
     threads = []
-    for i, station in enumerate(stations[region]):
-        thread = threading.Thread(target=fetch_data_for_station, args=(station, i))
+    for station_id in stations[region]:
+        print(f"Starting thread for station: {station_id}")
+        thread = threading.Thread(target=fetch_data_for_station, args=(station_id,))
         threads.append(thread)
         thread.start()
 
     for thread in threads:
         thread.join()
 
-    # Sort the results by tide value and limit to the specified number of results
-    station_lows.sort(key=lambda x: x["value"])
+    station_lows.sort(key=lambda x: float(x["value"]))
     return station_lows[:num_of_results]
 
 
-def create_map(station_lows):
-    """Creates a map with markers for the stations with the lowest tides."""
-    m = folium.Map(
-        location=[station_lows[0]["coordinates"][0], station_lows[0]["coordinates"][1]],
-        zoom_start=10,
-    )
-    for station in station_lows:
+def fetch_tide_data(station, start_date, end_date):
+    """Fetches tide data from the NOAA Tides and Currents API."""
+    print(f"Station data: {station}")
+    api_url = f"https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date={start_date}&end_date={end_date}&station={station['id']}&product=predictions&datum=MLLW&units=english&time_zone=lst_ldt&application=web_services&format=json"
+    print(f"Fetching tide data from URL: {api_url}")
+    response = requests.get(api_url)
+    if response.status_code == 200:
+        data = response.json()
+        if "predictions" in data:
+            return data["predictions"]
+        else:
+            print(f"No predictions found in response for station {station['id']}")
+    else:
+        print(
+            f"Failed to fetch data for station {station['id']}: {response.status_code} - {response.text}"
+        )
+    return []
+
+
+def fetch_station_metadata(station_id):
+    """Fetches station metadata from the NOAA Tides and Currents API."""
+    api_url = f"https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations/{station_id}.json"
+    print(f"Fetching station metadata from URL: {api_url}")
+    response = requests.get(api_url)
+    if response.status_code == 200:
+        data = response.json()
+        if "stations" in data:
+            station = data["stations"][0]
+            return {
+                "id": station_id,
+                "name": station["name"],
+                "lat": station["lat"],
+                "lon": station["lng"],
+            }
+        else:
+            print(f"No metadata found for station {station_id}")
+    else:
+        print(
+            f"Failed to fetch metadata for station {station_id}: {response.status_code} - {response.text}"
+        )
+    return {"id": station_id, "name": f"Station {station_id}", "lat": None, "lon": None}
+
+
+def create_map(lowest_tides):
+    """Creates a map with markers for the lowest tides."""
+    if not lowest_tides:
+        return None
+
+    map_center = [lowest_tides[0]["lat"], lowest_tides[0]["lon"]]
+    tide_map = folium.Map(location=map_center, zoom_start=10)
+
+    for tide in lowest_tides:
         folium.Marker(
-            location=station["coordinates"],
-            popup=f"{station['station_name']}<br>Time: {station['time']}<br>Value: {station['value']} feet",
-            tooltip=station["station_name"],
-        ).add_to(m)
-    return m._repr_html_()
+            location=[tide["lat"], tide["lon"]],
+            popup=f"{tide['station_name']}: {tide['value']} feet at {tide['time']}",
+        ).add_to(tide_map)
+
+    return tide_map._repr_html_()
 
 
-@app.route("/", methods=["GET", "POST"])
-def index():
-    if request.method == "POST":
-        region = request.form["region"]
-        start_date = request.form["start_date"]
-        end_date = request.form["end_date"]
-        num_of_results = int(request.form["num_of_results"])
-
-        stations = load_stations("stations.json")
-        if region not in stations:
-            return "Invalid region. Exiting.", 400
-
-        lowest_tides = get_lowest_tides(
-            stations, region, start_date, end_date, num_of_results
-        )
-        map_html = create_map(lowest_tides)
-        return render_template(
-            "results.html", lowest_tides=lowest_tides, region=region, map_html=map_html
-        )
-
-    stations = load_stations("stations.json")
-    return render_template("index.html", regions=stations.keys())
+"""
+TODO: click station = highlight pin on map
+TODO: pin display formatting
+TODO: loading progress bar
+TODO: polishing code in general
+"""

@@ -2,53 +2,44 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Low Tide Results</title>
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body, html {
-            height: 100%;
-            margin: 0;
-        }
-        .container {
-            display: flex;
-            height: 100%;
-        }
-        .results {
-            flex: 1;
-            padding: 10px;
-            overflow-y: auto;
-        }
-        .map {
-            flex: 1;
-            padding: 10px;
-            height: 100%;
-        }
-        #map {
-            height: 100%;
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lowest Tides</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
-    <div class="container-fluid">
-        <h1 class="text-center">Lowest Tides in {{ region }}</h1>
-        <div class="container">
-            <div class="results">
-                <ul class="list-group">
-                    {% for details in lowest_tides %}
-                        <li class="list-group-item">
-                            <strong>{{ details.time }}</strong> - {{ details.station_name }}: {{ details.value }} feet
-                        </li>
-                    {% endfor %}
-                </ul>
-                <a href="{{ url_for('index') }}" class="btn btn-secondary mt-3">Back</a>
-            </div>
-            <div class="map" id="map">
-                {{ map_html|safe }}
-            </div>
+    <div id="map">
+        {{ map_html|safe }}
+    </div>
+    <div class="overlay card shadow">
+        <div class="card-body">
+            <h2 class="card-title text-uppercase text-primary">Stations</h2>
+            <ul class="list-group list-group-flush">
+                {% for tide in lowest_tides %}
+                <li class="list-group-item" data-lat="{{ tide.lat }}" data-lon="{{ tide.lon }}">
+                    <strong class="station-name">{{ tide.station_name | title }}</strong><br>
+                    <span class="text-muted"><strong>Lowest Tide:</strong></span> {{ tide.value }} feet<br>
+                    <span class="text-muted"><strong>Date:</strong></span> {{ tide.time }}
+                </li>
+                {% endfor %}
+            </ul>
         </div>
     </div>
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            // Highlight corresponding pin on the map when a station is clicked
+            $('.list-group-item').on('click', function() {
+                var lat = $(this).data('lat');
+                var lon = $(this).data('lon');
+                var marker = L.marker([lat, lon]).addTo(map);
+                marker.openPopup();
+                $('.list-group-item').removeClass('active');
+                $(this).addClass('active');
+            });
+        });
+    </script>
 </body>
 </html>
