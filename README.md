@@ -12,6 +12,9 @@ The Low Tide Web App allows users to find and visualize the lowest tide predicti
 - Fetch and display the lowest tide predictions for the selected region and date range.
 - Interactive map with markers for the lowest tides.
 
+![alt text](https://github.com/m3lmark/low_tides/blob/main/web_page_screenshots/web_page_inputs.png?raw=true)
+![alt text](https://github.com/m3lmark/low_tides/blob/main/web_page_screenshots/web_page_results.png?raw=true)
+
 ## Requirements
 
 - Flask
