@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Find Lowest Tides</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="card shadow">
+            <div class="card-body">
+                <h1 class="card-title">Find Lowest Tides</h1>
+                <form id="tideForm" action="{{ url_for('find_lowest_tides') }}" method="post">
+                    <div class="form-group">
+                        <label for="region">Region:</label>
+                        <select name="region" id="region" class="form-control">
+                            {% for region in regions %}
+                            <option value="{{ region }}">{{ region }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="daterange">Date Range:</label>
+                        <input type="text" name="daterange" id="daterange" class="form-control" />
+                        <small id="daterangeError" class="form-text text-danger" style="display: none;">Date range cannot exceed 31 days.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="num_of_results">Number of Results:</label>
+                        <input type="number" name="num_of_results" id="num_of_results" class="form-control" min="1" max="25" value="10" />
+                        <small id="numOfResultsError" class="form-text text-danger" style="display: none;">Number of results must be between 1 and 25.</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Find Lowest Tides</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment/min/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+    <script>
+        $(function() {
+            $('#daterange').daterangepicker({
+                opens: 'left'
+            });
+
+            $('#tideForm').on('submit', function(event) {
+                let isValid = true;
+                $('#daterangeError').hide();
+                $('#numOfResultsError').hide();
+
+                const daterange = $('#daterange').val().split(' - ');
+                const startDate = moment(daterange[0], 'MM/DD/YYYY');
+                const endDate = moment(daterange[1], 'MM/DD/YYYY');
+                if (endDate.diff(startDate, 'days') > 31) {
+                    $('#daterangeError').show();
+                    isValid = false;
+                }
+
+                const numOfResults = parseInt($('#num_of_results').val());
+                if (numOfResults < 1 || numOfResults > 25) {
+                    $('#numOfResultsError').show();
+                    isValid = false;
+                }
+
+                if (!isValid) {
+                    event.preventDefault();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
