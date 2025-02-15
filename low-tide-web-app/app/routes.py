@@ -1,9 +1,9 @@
+from flask import render_template, request
 from app import app
-from flask import render_template, request, redirect, url_for
 import json
 import requests
-from datetime import datetime, timedelta
-import threading
+from datetime import datetime
+import concurrent.futures
 import folium
 
 
@@ -88,15 +88,12 @@ def get_lowest_tides(stations, region, start_date, end_date, num_of_results):
                 }
             )
 
-    threads = []
-    for station_id in stations[region]:
-        print(f"Starting thread for station: {station_id}")
-        thread = threading.Thread(target=fetch_data_for_station, args=(station_id,))
-        threads.append(thread)
-        thread.start()
-
-    for thread in threads:
-        thread.join()
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [
+            executor.submit(fetch_data_for_station, station_id)
+            for station_id in stations[region]
+        ]
+        concurrent.futures.wait(futures)
 
     station_lows.sort(key=lambda x: float(x["value"]))
     return station_lows[:num_of_results]
@@ -160,11 +157,3 @@ def create_map(lowest_tides):
         ).add_to(tide_map)
 
     return tide_map._repr_html_()
-
-
-"""
-TODO: click station = highlight pin on map
-TODO: pin display formatting
-TODO: loading progress bar
-TODO: polishing code in general
-"""
