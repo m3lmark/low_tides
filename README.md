@@ -1,8 +1,8 @@
-# Low Tide Web App
+# Low Tide [Web App](https://low-tide-webapp-icgdv.ondigitalocean.app/)
 
 ## Description
 
-The Low Tide Web App allows users to find and visualize the lowest tide predictions for various regions. Users can select a region, specify a date range, and choose the number of results to display. The app fetches tide data from the NOAA Tides and Currents API and displays the results on an interactive map.
+The Low Tide [Web App](https://low-tide-webapp-icgdv.ondigitalocean.app/) allows users to find and visualize the lowest tide predictions for various regions. Users can select a region, specify a date range, and choose the number of results to display. The app fetches tide data from the NOAA Tides and Currents API and displays the results on an interactive map.
 
 ## Features
 
